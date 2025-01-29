@@ -57,8 +57,10 @@ namespace Pronun.SpeechToText.RealTime.Controllers
             // Replace with your own subscription key and service region (e.g., "westus").
             var config = SpeechConfig.FromSubscription("eab6399a341a456aa6849fcd01f9a83e", "eastus");
 
-            // Creates a speech recognizer using the default microphone as audio input.
-            using (var audioInput = AudioConfig.FromDefaultMicrophoneInput())
+            try
+            {
+                // Creates a speech recognizer using the default microphone as audio input.
+                using (var audioInput = AudioConfig.FromDefaultMicrophoneInput())
             {
                 var language = "en-US";
 
@@ -164,7 +166,16 @@ namespace Pronun.SpeechToText.RealTime.Controllers
                 }
             }
 
+            
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"An error occurred: {ex.Message}");
+                // Log the exception details for further investigation
+            }
+
             return result;
         }
+
     }
 }

@@ -1,0 +1,179 @@
+﻿@model Pronun.SpeechToText.RealTime.Controllers.Test3Controller.AssessmentResult
+
+<div class="container">
+    <button id="startRecording" class="btn btn-primary">Start Recording</button>
+    <button id="stopRecording" class="btn btn-danger" disabled>Stop Recording</button>
+    <div id="status"></div>
+    <div id="errorDetails" style="color: red;"></div>
+    <div id="recordingTime"></div>
+</div>
+
+<script>
+let mediaRecorder;
+let audioChunks = [];
+const statusElement = document.getElementById('status');
+const errorElement = document.getElementById('errorDetails');
+const startButton = document.getElementById('startRecording');
+const stopButton = document.getElementById('stopRecording');
+const recordingTimeElement = document.getElementById('recordingTime');
+
+// Function to convert audio to proper format
+async function convertToMono16kHz(audioBuffer) {
+    const offlineContext = new OfflineAudioContext({
+        numberOfChannels: 1,
+        length: audioBuffer.duration * 16000,
+        sampleRate: 16000,
+    });
+    
+    const source = offlineContext.createBufferSource();
+    source.buffer = audioBuffer;
+    source.connect(offlineContext.destination);
+    source.start();
+    
+    return offlineContext.startRendering();
+}
+
+startButton.onclick = async () => {
+    try {
+        errorElement.textContent = '';
+        const stream = await navigator.mediaDevices.getUserMedia({ 
+            audio: {
+                channelCount: 1,
+                sampleRate: { ideal: 16000 }
+            } 
+        });
+        
+        const audioContext = new AudioContext();
+        const mediaStreamSource = audioContext.createMediaStreamSource(stream);
+        const recorder = audioContext.createScriptProcessor(4096, 1, 1);
+        
+        let audioData = [];
+        
+        recorder.onaudioprocess = (e) => {
+            const channelData = e.inputBuffer.getChannelData(0);
+            audioData.push(new Float32Array(channelData));
+        };
+        
+        mediaStreamSource.connect(recorder);
+        recorder.connect(audioContext.destination);
+        
+        startButton.disabled = true;
+        stopButton.disabled = false;
+        statusElement.textContent = 'Recording...';
+        
+        let startTime = Date.now();
+        let recordingInterval = setInterval(() => {
+            const elapsed = Math.floor((Date.now() - startTime) / 1000);
+            recordingTimeElement.textContent = `Recording: ${elapsed}s`;
+        }, 1000);
+        
+        stopButton.onclick = async () => {
+            clearInterval(recordingInterval);
+            recorder.disconnect();
+            mediaStreamSource.disconnect();
+            stream.getTracks().forEach(track => track.stop());
+            
+            const audioBuffer = audioContext.createBuffer(1, audioData.length * 4096, audioContext.sampleRate);
+            const channelData = audioBuffer.getChannelData(0);
+            for (let i = 0; i < audioData.length; i++) {
+                channelData.set(audioData[i], i * 4096);
+            }
+            
+            statusElement.textContent = 'Converting audio...';
+            
+            try {
+                const mono16Buffer = await convertToMono16kHz(audioBuffer);
+                const wavBuffer = createWavBuffer(mono16Buffer);
+                const audioBlob = new Blob([wavBuffer], { type: 'audio/wav' });
+                
+                const formData = new FormData();
+                formData.append('audio', audioBlob, 'recording.wav');
+                
+                statusElement.textContent = 'Processing audio...';
+                
+                const response = await fetch('/Test3/ProcessAudioStream', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                const responseText = await response.text();
+                console.log('Server response:', responseText);
+                
+                if (response.ok) {
+                    const result = JSON.parse(responseText);
+                    statusElement.textContent = `Results:
+                        Pronunciation: ${result.pronunciationScore.toFixed(1)}
+                        Accuracy: ${result.accuracyScore.toFixed(1)}
+                        Fluency: ${result.fluencyScore.toFixed(1)}
+                        Completeness: ${result.completenessScore.toFixed(1)}`;
+                } else {
+                    errorElement.textContent = `Server error: ${responseText}`;
+                }
+            } catch (error) {
+                errorElement.textContent = 'Error processing audio: ' + error.message;
+                console.error('Error:', error);
+            }
+            
+            startButton.disabled = false;
+            stopButton.disabled = true;
+            recordingTimeElement.textContent = '';
+        };
+        
+    } catch (error) {
+        errorElement.textContent = 'Error accessing microphone: ' + error.message;
+        console.error('Microphone error:', error);
+    }
+};
+
+// Function to create WAV buffer
+function createWavBuffer(audioBuffer) {
+    const numChannels = 1;
+    const sampleRate = audioBuffer.sampleRate;
+    const format = 1; // PCM
+    const bitDepth = 16;
+    
+    const bytesPerSample = bitDepth / 8;
+    const blockAlign = numChannels * bytesPerSample;
+    
+    const buffer = audioBuffer.getChannelData(0);
+    const dataSize = buffer.length * bytesPerSample;
+    const headerSize = 44;
+    const wav = new ArrayBuffer(headerSize + dataSize);
+    const view = new DataView(wav);
+    
+    // WAV header
+    writeString(view, 0, 'RIFF');
+    view.setUint32(4, 36 + dataSize, true);
+    writeString(view, 8, 'WAVE');
+    writeString(view, 12, 'fmt ');
+    view.setUint32(16, 16, true);
+    view.setUint16(20, format, true);
+    view.setUint16(22, numChannels, true);
+    view.setUint32(24, sampleRate, true);
+    view.setUint32(28, sampleRate * blockAlign, true);
+    view.setUint16(32, blockAlign, true);
+    view.setUint16(34, bitDepth, true);
+    writeString(view, 36, 'data');
+    view.setUint32(40, dataSize, true);
+    
+    // Audio data
+    const samples = new Int16Array(buffer.length);
+    for (let i = 0; i < buffer.length; i++) {
+        const s = Math.max(-1, Math.min(1, buffer[i]));
+        samples[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
+    }
+    
+    const samplesBytes = new Uint8Array(samples.buffer);
+    for (let i = 0; i < samplesBytes.length; i++) {
+        view.setUint8(headerSize + i, samplesBytes[i]);
+    }
+    
+    return wav;
+}
+
+function writeString(view, offset, string) {
+    for (let i = 0; i < string.length; i++) {
+        view.setUint8(offset + i, string.charCodeAt(i));
+    }
+}
+</script>
