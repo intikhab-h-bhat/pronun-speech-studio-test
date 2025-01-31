@@ -1,11 +1,23 @@
-﻿@model Pronun.SpeechToText.RealTime.Controllers.Test3Controller.AssessmentResult
+﻿@* @model Pronun.SpeechToText.RealTime.Controllers.Test3Controller.AssessmentResult
 
 <div class="container">
+     <div class="card shadow-sm border-0 mb-4">
+            <div class="card-body">
+                <h2 class="h4 text-primary mb-4">Lesson 1</h2>
+                <p class="text-muted mb-4">
+                    Today was a beautiful day. We had a great time taking a long walk outside in the morning.
+                    The countryside was in full bloom, yet the air was crisp and cold.
+                    Towards the end of the day, clouds came in, forecasting much-needed rain.
+                </p>
+                </div>
     <button id="startRecording" class="btn btn-primary">Start Recording</button>
     <button id="stopRecording" class="btn btn-danger" disabled>Stop Recording</button>
+   
+    
     <div id="status"></div>
     <div id="errorDetails" style="color: red;"></div>
-    <div id="recordingTime"></div>
+   
+    <div id="recordingTime"></div> 
 </div>
 
 <script>
@@ -101,11 +113,12 @@ startButton.onclick = async () => {
                 
                 if (response.ok) {
                     const result = JSON.parse(responseText);
-                    statusElement.textContent = `Results:
-                        Pronunciation: ${result.pronunciationScore.toFixed(1)}
-                        Accuracy: ${result.accuracyScore.toFixed(1)}
-                        Fluency: ${result.fluencyScore.toFixed(1)}
-                        Completeness: ${result.completenessScore.toFixed(1)}`;
+                    // statusElement.textContent = `Results:
+                    statusElement.innerHTML = ` <div class="p-4 bg-white shadow-lg rounded-lg text-center">Results:</div>
+                        <div class="p-4 bg-white shadow-lg rounded-lg text-center">Pronunciation: ${result.pronunciationScore.toFixed(1)}</div>
+                        <div class="p-4 bg-white shadow-lg rounded-lg text-center">Accuracy: ${result.accuracyScore.toFixed(1)}</div>
+                       <div class="p-4 bg-white shadow-lg rounded-lg text-center">Fluency: ${result.fluencyScore.toFixed(1)}</div>
+                      <div class="p-4 bg-white shadow-lg rounded-lg text-center"> Completeness: ${result.completenessScore.toFixed(1)}</div>`;
                 } else {
                     errorElement.textContent = `Server error: ${responseText}`;
                 }
@@ -176,4 +189,4 @@ function writeString(view, offset, string) {
         view.setUint8(offset + i, string.charCodeAt(i));
     }
 }
-</script>
+</script> *@

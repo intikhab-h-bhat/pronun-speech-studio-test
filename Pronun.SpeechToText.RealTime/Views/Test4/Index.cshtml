@@ -1,0 +1,344 @@
+﻿@model Pronun.SpeechToText.RealTime.Controllers.Test4Controller.AssessmentResult
+
+<div class="container">
+    <div class="card shadow-sm border-0 mb-4">
+        <div class="card-body">
+            <h2 class="h4 text-primary mb-4">Lesson 1</h2>
+            
+            <!-- Reference Text with Individual Words -->
+            <div class="reference-text mb-4 p-3 bg-light rounded">
+                @{
+                    var referenceText = "Today was a beautiful day. We had a great time taking a long walk outside in the morning. The countryside was in full bloom, yet the air was crisp and cold. Towards the end of the day, clouds came in, forecasting much needed rain.";
+                    var words = referenceText.Split(' ');
+                    foreach (var word in words)
+                    {
+                        <span class="reference-word d-inline-block">@word</span>
+                    }
+                }
+            </div>
+             <!-- Controls -->
+            <div class="mb-3">
+                <button id="startRecording" class="btn btn-primary">Start Recording</button>
+                <button id="stopRecording" class="btn btn-danger" disabled>Stop Recording</button>
+            </div>
+
+            <!-- Real-time Transcript -->
+            <div class="mb-3">
+                
+                <h5 class="text-secondary">Your Speech:</h5>
+                    
+                <div id="realTimeTranscript" class="p-2 border rounded bg-white">
+                  
+                </div>
+            </div>
+
+            <!-- Insertions Display -->
+           @*  <div class="mb-3">
+                <h5 class="text-secondary">Extra Words:</h5>
+                <div id="insertions" class="p-2 border rounded bg-white"></div>
+            </div> *@
+
+           @*  <!-- Controls -->
+            <div class="mb-3">
+                <button id="startRecording" class="btn btn-primary">Start Recording</button>
+                <button id="stopRecording" class="btn btn-danger" disabled>Stop Recording</button>
+            </div> *@
+
+            <!-- Status & Results -->
+            <div id="status" class="alert alert-info"></div>
+            <div id="errorDetails" class="alert alert-danger d-none"></div>
+
+            <!-- Score Display -->
+            <div id="resultsDisplay" class="row g-3 d-none">
+                <div class="col-md-3">
+                    <div class="p-3 bg-primary text-white rounded text-center">
+                        <h5>Pronunciation</h5>
+                        <h2 id="pronunciationScore">-</h2>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="p-3 bg-success text-white rounded text-center">
+                        <h5>Accuracy</h5>
+                        <h2 id="accuracyScore">-</h2>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="p-3 bg-warning text-dark rounded text-center">
+                        <h5>Fluency</h5>
+                        <h2 id="fluencyScore">-</h2>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="p-3 bg-info text-white rounded text-center">
+                        <h5>Completeness</h5>
+                        <h2 id="completenessScore">-</h2>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    .reference-word {
+        margin: 2px;
+        padding: 2px 5px;
+        border-radius: 3px;
+        transition: all 0.3s ease;
+    }
+
+    .omission {
+        background-color: #ff6666 !important;
+        text-decoration: line-through;
+    }
+
+    .mispronunciation {
+        background-color: #ffff99 !important;
+    }
+
+    .insertion {
+        background-color: #cc99ff;
+        display: inline-block;
+        margin: 2px;
+        padding: 2px 5px;
+        border-radius: 3px;
+        text-decoration: underline;
+    }
+
+    #realTimeTranscript {
+        min-height: 60px;
+    }
+</style>
+
+<script>
+    let mediaRecorder;
+    let audioChunks = [];
+    let recognition;
+    const referenceWords = document.querySelectorAll('.reference-word');
+    let currentRecording = null;
+
+    // Initialize Web Speech API
+    function initSpeechRecognition() {
+        recognition = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
+        recognition.continuous = true;
+        recognition.interimResults = true;
+        recognition.lang = 'en-US';
+
+        recognition.onresult = (event) => {
+            const transcript = Array.from(event.results)
+                .filter(result => result.isFinal)
+                .map(result => result[0].transcript)
+                .join(' ');
+            document.getElementById('realTimeTranscript').textContent = transcript;
+            console.log(transcript);
+        };
+    }
+
+    // Start Recording
+    document.getElementById('startRecording').onclick = async () => {
+        try {
+            // Reset UI
+            document.getElementById('errorDetails').classList.add('d-none');
+            document.getElementById('resultsDisplay').classList.add('d-none');
+            document.querySelectorAll('.reference-word').forEach(span => {
+                span.classList.remove('omission', 'mispronunciation');
+            });
+            // document.getElementById('insertions').innerHTML = '';
+            document.getElementById('realTimeTranscript').textContent = '';
+
+            // Initialize speech recognition
+            initSpeechRecognition();
+            recognition.start();
+
+            // Start audio recording
+            const stream = await navigator.mediaDevices.getUserMedia({ 
+                audio: {
+                    channelCount: 1,
+                    sampleRate: { ideal: 16000 }
+                } 
+            });
+            
+            const audioContext = new AudioContext();
+            const mediaStreamSource = audioContext.createMediaStreamSource(stream);
+            const recorder = audioContext.createScriptProcessor(4096, 1, 1);
+            
+            currentRecording = {
+                audioData: [],
+                context: audioContext,
+                source: mediaStreamSource,
+                processor: recorder
+            };
+
+            recorder.onaudioprocess = (e) => {
+                const channelData = e.inputBuffer.getChannelData(0);
+                currentRecording.audioData.push(new Float32Array(channelData));
+            };
+            
+            mediaStreamSource.connect(recorder);
+            recorder.connect(audioContext.destination);
+            
+            document.getElementById('startRecording').disabled = true;
+            document.getElementById('stopRecording').disabled = false;
+            document.getElementById('status').textContent = 'Recording...';
+        } catch (error) {
+            showError('Microphone error: ' + error.message);
+        }
+    };
+
+    // Stop Recording
+    document.getElementById('stopRecording').onclick = async () => {
+        try {
+            if (recognition) recognition.stop();
+            document.getElementById('status').textContent = 'Processing...';
+            document.getElementById('stopRecording').disabled = true;
+
+            // Process audio
+            const audioBuffer = currentRecording.context.createBuffer(
+                1,
+                currentRecording.audioData.length * 4096,
+                currentRecording.context.sampleRate
+            );
+            
+            const channelData = audioBuffer.getChannelData(0);
+            for (let i = 0; i < currentRecording.audioData.length; i++) {
+                channelData.set(currentRecording.audioData[i], i * 4096);
+            }
+
+            // Convert to WAV
+            const mono16Buffer = await convertToMono16kHz(audioBuffer);
+            const wavBuffer = createWavBuffer(mono16Buffer);
+            const audioBlob = new Blob([wavBuffer], { type: 'audio/wav' });
+
+            // Send to server
+            const formData = new FormData();
+            formData.append('audio', audioBlob, 'recording.wav');
+
+            const response = await fetch('/Test4/ProcessAudioStream', {
+                method: 'POST',
+                body: formData
+            });
+
+            const responseText = await response.text();
+            const result = JSON.parse(responseText);
+
+            if (response.ok) {
+                // Update scores
+                document.getElementById('resultsDisplay').classList.remove('d-none');
+                document.getElementById('pronunciationScore').textContent = result.pronunciationScore.toFixed(1);
+                document.getElementById('accuracyScore').textContent = result.accuracyScore.toFixed(1);
+                document.getElementById('fluencyScore').textContent = result.fluencyScore.toFixed(1);
+                document.getElementById('completenessScore').textContent = result.completenessScore.toFixed(1);
+
+                // Highlight errors
+                result.words.forEach((word, index) => {
+                    if (index < referenceWords.length) {
+                        const span = referenceWords[index];
+                        if (word.errorType === 'Omission') {
+                            span.classList.add('omission');
+                        } else if (word.errorType === 'Mispronunciation') {
+                            span.classList.add('mispronunciation');
+                        }
+                    } else if (word.errorType === 'Insertion') {
+                        const insertionSpan = document.createElement('span');
+                        insertionSpan.textContent = word.wordText;
+                        insertionSpan.classList.add('insertion');
+                        document.getElementById('insertions').appendChild(insertionSpan);
+                    }
+                });
+
+                document.getElementById('status').textContent = 'Analysis complete';
+            } else {
+                showError('Server error: ' + responseText);
+            }
+        } catch (error) {
+            showError('Processing error: ' + error.message);
+        } finally {
+            document.getElementById('startRecording').disabled = false;
+            currentRecording.source.disconnect();
+            currentRecording.processor.disconnect();
+        }
+    };
+
+    function showError(message) {
+        document.getElementById('errorDetails').textContent = message;
+        document.getElementById('errorDetails').classList.remove('d-none');
+        document.getElementById('status').textContent = 'Error occurred';
+    }
+
+       // Audio Processing Functions
+    async function convertToMono16kHz(audioBuffer) {
+        const offlineContext = new OfflineAudioContext({
+            numberOfChannels: 1,
+            length: audioBuffer.length * 16000 / audioBuffer.sampleRate,
+            sampleRate: 16000
+        });
+
+        const source = offlineContext.createBufferSource();
+        const newBuffer = offlineContext.createBuffer(1, offlineContext.length, offlineContext.sampleRate);
+        const originalData = audioBuffer.getChannelData(0);
+        const newData = newBuffer.getChannelData(0);
+
+        // Resample audio
+        const ratio = audioBuffer.sampleRate / 16000;
+        for (let i = 0; i < offlineContext.length; i++) {
+            newData[i] = originalData[Math.floor(i * ratio)];
+        }
+
+        source.buffer = newBuffer;
+        source.connect(offlineContext.destination);
+        source.start();
+
+        return offlineContext.startRendering();
+    }
+
+    function createWavBuffer(audioBuffer) {
+        const numChannels = 1;
+        const sampleRate = audioBuffer.sampleRate;
+        const format = 1; // PCM
+        const bitDepth = 16;
+        const bytesPerSample = bitDepth / 8;
+        const blockAlign = numChannels * bytesPerSample;
+        const buffer = audioBuffer.getChannelData(0);
+        const dataSize = buffer.length * bytesPerSample;
+        const headerSize = 44;
+        const wav = new ArrayBuffer(headerSize + dataSize);
+        const view = new DataView(wav);
+
+        // Write WAV header
+        writeString(view, 0, 'RIFF');
+        view.setUint32(4, 36 + dataSize, true);
+        writeString(view, 8, 'WAVE');
+        writeString(view, 12, 'fmt ');
+        view.setUint32(16, 16, true);
+        view.setUint16(20, format, true);
+        view.setUint16(22, numChannels, true);
+        view.setUint32(24, sampleRate, true);
+        view.setUint32(28, sampleRate * blockAlign, true);
+        view.setUint16(32, blockAlign, true);
+        view.setUint16(34, bitDepth, true);
+        writeString(view, 36, 'data');
+        view.setUint32(40, dataSize, true);
+
+        // Write audio samples
+        const samples = new Int16Array(buffer.length);
+        for (let i = 0; i < buffer.length; i++) {
+            const s = Math.max(-1, Math.min(1, buffer[i]));
+            samples[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
+        }
+
+        const samplesBytes = new Uint8Array(samples.buffer);
+        for (let i = 0; i < samplesBytes.length; i++) {
+            view.setUint8(headerSize + i, samplesBytes[i]);
+        }
+
+        return wav;
+    }
+
+    function writeString(view, offset, string) {
+        for (let i = 0; i < string.length; i++) {
+            view.setUint8(offset + i, string.charCodeAt(i));
+        }
+    }
+
+
+</script>
