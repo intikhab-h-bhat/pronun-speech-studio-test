@@ -8,10 +8,10 @@ using System.Linq.Expressions;
 
 namespace Pronun.SpeechToText.RealTime.Controllers
 {
-    public class Test3Controller : Controller
+    public class Test5Controller : Controller
     {
-        private readonly ILogger<Test3Controller> _logger;
-        public Test3Controller(ILogger<Test3Controller> logger)
+        private readonly ILogger<Test5Controller> _logger;
+        public Test5Controller(ILogger<Test5Controller> logger)
         {
             _logger = logger;
         }
@@ -23,12 +23,8 @@ namespace Pronun.SpeechToText.RealTime.Controllers
             public double AccuracyScore { get; set; }
             public double CompletenessScore { get; set; }
             public double FluencyScore { get; set; }
-            public double ProsodyScore { get; set; }
 
-            public AssessmentResult()
-            {
-                Words = new List<Word>();
-            }
+            public AssessmentResult() => Words = new List<Word>();
         }
 
         public class Word
@@ -99,7 +95,8 @@ namespace Pronun.SpeechToText.RealTime.Controllers
                     var pronConfig = new PronunciationAssessmentConfig(
                         referenceText,
                         GradingSystem.HundredMark,
-                        Granularity.Phoneme,
+                         Granularity.Word,
+                        // Granularity.Phoneme,
                         enableMiscue: true);
 
                     pronConfig.EnableProsodyAssessment();
@@ -132,7 +129,7 @@ namespace Pronun.SpeechToText.RealTime.Controllers
                             result.PronunciationScore = pronResult.PronunciationScore;
                             result.CompletenessScore = pronResult.CompletenessScore;
                             result.FluencyScore = pronResult.FluencyScore;
-                            result.ProsodyScore = pronResult.ProsodyScore;
+                            //result.ProsodyScore = pronResult.ProsodyScore;
 
                             foreach (var word in pronResult.Words)
                             {
